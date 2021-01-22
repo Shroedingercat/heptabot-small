@@ -57,6 +57,7 @@ class t5Pytorch(HfPyTorchModel):
         if self.student is not None:
             self._step = 0
             self.student.to(device)
+            self._model.eval()
         self.to_tensor = functools.partial(torch.as_tensor, device=self._device)
 
     def train(
@@ -140,27 +141,33 @@ class t5Pytorch(HfPyTorchModel):
                             lm_labels = y.clone()
 
                             lm_labels[lm_labels[:, :] == tokenizer.pad_token_id] = -100
+                            if task == "bea":
+                                if self.student is not None:
+                                    out = self.student(input_ids=ids, labels=lm_labels, attention_mask=attention_mask)
+                                else:
+                                    out = self._model(input_ids=ids, labels=lm_labels, attention_mask=attention_mask)
+                                scores += out[0].cpu().tolist()
+                            else:
+                                if self.student is not None:
+                                    with torch.no_grad():
+                                        generated_ids = self.student.T5mini.generate(
+                                            input_ids=ids,
+                                            attention_mask=attention_mask,
+                                            max_length=256,
+                                        )
 
-                            if self.student is not None:
-                                with torch.no_grad():
-                                    generated_ids = self.student.T5mini.generate(
+                                else:
+                                    generated_ids = self._model.generate(
                                         input_ids=ids,
                                         attention_mask=attention_mask,
                                         max_length=256,
                                     )
 
-                            else:
-                                generated_ids = self._model.generate(
-                                    input_ids=ids,
-                                    attention_mask=attention_mask,
-                                    max_length=256,
-                                )
-
-                            if task == "corr":
-                                    preds, target, score = get_bleu(generated_ids, y)
-                            elif task == "jfleg":
-                                preds, target, score = get_gleu(generated_ids, y)
-                            scores += score
+                                if task == "corr":
+                                        preds, target, score = get_bleu(generated_ids, y)
+                                elif task == "jfleg":
+                                    preds, target, score = get_gleu(generated_ids, y)
+                                scores += score
 
                         self._writer.add_scalar(
                             f"eval_{task}", scores/len(loader), global_step=self._step
@@ -212,8 +219,16 @@ class t5Pytorch(HfPyTorchModel):
 
                     loss = student_outputs[1]
                     task_loss = student_outputs[0]
+                    emb_loss = student_outputs[2]
+                    distill_loss = student_outputs[3]
                     self._writer.add_scalar(
                         "task_loss", task_loss.detach().cpu().numpy(), self._step
+                    )
+                    self._writer.add_scalar(
+                        "emb_loss", emb_loss.detach().cpu().numpy(), self._step
+                    )
+                    self._writer.add_scalar(
+                        "distill_loss", distill_loss.detach().cpu().numpy(), self._step
                     )
                 else:
                     outputs = self._model(
@@ -292,6 +307,8 @@ class t5Pytorch(HfPyTorchModel):
           step: int, the current training step.
         """
         path = os.path.join(self._model_dir, f"student_{step}")
+        path_w = os.path.join(self._model_dir, f"student_w_{step}")
+        torch.save(self.student.W.state_dict(), path_w)
         torch.save(self.student.T5mini.state_dict(), path)
 
     def load_latest_checkpoint_student(self):

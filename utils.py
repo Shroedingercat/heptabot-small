@@ -3,8 +3,18 @@ from nltk.translate.bleu_score import sentence_bleu
 import torch
 import torch.nn.functional as F
 
+
 from transformers import T5TokenizerFast, T5Model, T5Config
 tokenizer = T5TokenizerFast.from_pretrained('/home/nasorokin11/T5small')
+
+
+def get_corpus_gleu_jfleg(pred, target, max_length=512):
+    bleu = 0
+    for i in range(pred.shape[0]):
+        p = (tokenizer.decode(pred[i], skip_special_tokens=True)).split(" ")
+        t = [(tokenizer.decode(target[i][j][0], skip_special_tokens=True)).split(" ") for j in range(len(target[i]))]
+        bleu += sentence_gleu(t, p)
+    return p, t, bleu/pred.shape[0]
 
 
 def clean_repeats(s):

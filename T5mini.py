@@ -28,6 +28,8 @@ class T5mini(torch.nn.Module):
             return self.T5mini(input_ids=input_ids, labels=labels, attention_mask=attention_mask)
         else:
             student_outputs = self.T5mini(input_ids=input_ids, labels=labels, attention_mask=attention_mask)
-            loss = (student_outputs[0] + kl_div(student_outputs[1], teacher[1]) +
-                    cos_loss(self.W(student_outputs[3]), teacher[3])) / 3.0
-            return student_outputs[0], loss
+            distill_loss = kl_div(student_outputs[1], teacher[1])
+            emb_loss = cos_loss(self.W(student_outputs[3]), teacher[3])
+            loss = (student_outputs[0] + distill_loss +
+                    emb_loss) / 3.0
+            return student_outputs[0], loss, emb_loss,  distill_loss
