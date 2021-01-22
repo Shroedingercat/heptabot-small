@@ -10,4 +10,5 @@ T5 neural network pre-trained on correction, JFLEG, CoNLL-2014, and bea datasets
 | Quantized T5            | 0.812      | 0.792 | -          | 54.21 | 3.3333s
 
 ### training 
+python train.py --path $PATH_TO_DATA --dir $DIR_FOR_SAVING --tokenizer $TOKENIZER --model $PATH_TO_MODEL --student $PATH_TO_STUDENT
 
