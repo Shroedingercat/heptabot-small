@@ -12,7 +12,7 @@ from T5mini import T5mini
 
 
 class t5Pytorch(HfPyTorchModel):
-    def __init__(self, model_spec, model_dir, device, student=None):
+    def __init__(self, model_spec, model_dir, device, student=None, tiny=True):
         """Constructor for HfModel class.
 
         Args:
@@ -40,7 +40,7 @@ class t5Pytorch(HfPyTorchModel):
             raise ValueError("model_spec should be a string or T5Config.")
 
         if student is not None:
-            self.student = T5mini(student, teacher_size=self._model.shared.embedding_dim)
+            self.student = T5mini(student, teacher_size=self._model.shared.embedding_dim, tiny=tiny)
             self.student.to(device)
         else:
             self.student = None
@@ -51,6 +51,7 @@ class t5Pytorch(HfPyTorchModel):
         self._model_dir = model_dir
         self._device = device
         self._model.to(device)
+        self.tiny = tiny
 
         self._step = 0
         self.load_latest_checkpoint()
@@ -96,6 +97,7 @@ class t5Pytorch(HfPyTorchModel):
         def get_lr(optimizer):
             for param_group in optimizer.param_groups:
                 return param_group['lr']
+
 
         self._model.train()
         ds = data_loader
@@ -211,10 +213,12 @@ class t5Pytorch(HfPyTorchModel):
                 if self.student is not None:
                     with torch.no_grad():
                         outputs = self._model(
-                            input_ids=ids, labels=lm_labels, attention_mask=attention_mask
+                            input_ids=ids, labels=lm_labels, attention_mask=attention_mask, output_hidden_states=True,
+                            use_cache=False, output_attentions=True
                         )
                     student_outputs = self.student(
-                        input_ids=ids, labels=lm_labels, attention_mask=attention_mask, teacher=outputs
+                        input_ids=ids, labels=lm_labels, attention_mask=attention_mask,
+                        teacher=outputs
                     )
 
                     loss = student_outputs[1]
@@ -232,7 +236,8 @@ class t5Pytorch(HfPyTorchModel):
                     )
                 else:
                     outputs = self._model(
-                        input_ids=ids, labels=lm_labels, attention_mask=attention_mask
+                        input_ids=ids, labels=lm_labels, attention_mask=attention_mask,output_hidden_states=True,
+                        use_cache=False, output_attentions=True
                     )
                     loss = outputs[0]
                 tran_loss += loss
@@ -306,10 +311,14 @@ class t5Pytorch(HfPyTorchModel):
         Args:
           step: int, the current training step.
         """
-        path = os.path.join(self._model_dir, f"student_{step}")
-        path_w = os.path.join(self._model_dir, f"student_w_{step}")
-        torch.save(self.student.W.state_dict(), path_w)
-        torch.save(self.student.T5mini.state_dict(), path)
+        if not self.tiny:
+            path = os.path.join(self._model_dir, f"student_{step}")
+            path_w = os.path.join(self._model_dir, f"student_w_{step}")
+            torch.save(self.student.W.state_dict(), path_w)
+            torch.save(self.student.T5mini.state_dict(), path)
+        else:
+            path = os.path.join(self._model_dir, f"tiny_student_{step}")
+            torch.save(self.student.T5mini.state_dict(), path)
 
     def load_latest_checkpoint_student(self):
         """Load the most recent checkpoint and update the model's current step."""
