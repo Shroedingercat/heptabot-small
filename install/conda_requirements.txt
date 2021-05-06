@@ -1,0 +1,7 @@
+spacy==1.9.0
+ipywidgets
+nltk
+pandas
+streamlit
+
+

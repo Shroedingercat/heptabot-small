@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 from transformers import T5TokenizerFast, T5Model, T5Config
-tokenizer = T5TokenizerFast.from_pretrained('/home/nasorokin11/T5small')
+tokenizer = T5TokenizerFast.from_pretrained('t5-small')
 
 
 def get_corpus_gleu_jfleg(pred, target, max_length=512):
